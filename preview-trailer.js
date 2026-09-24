@@ -182,7 +182,7 @@
         return popup;
     }
 
-    function runInAtWindow(){
+    function runInAtWindow() {
         let url = new URL(
             performance
                 .getEntriesByType('resource')
@@ -217,17 +217,17 @@
         } catch { return String(value || 'unavailable'); }
     }
 
-        const LOG_STORAGE_KEY = 'preview_trailer_update_logs';
+    const LOG_STORAGE_KEY = 'preview_trailer_update_logs';
 
     function appendLog(message, details) {
         try {
-            const entry = {timestamp: new Date().toISOString(), message};
+            const entry = { timestamp: new Date().toISOString(), message };
             if (details !== undefined) entry.details = details;
             const logs = [...readLogs(), entry].slice(-MAX_LOG_ENTRIES);
             global.localStorage?.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
         } catch { /* Logging must not stop the shortcut update. */ }
     }
-    
+
     function createLogger(options = {}, consoleLike = globalThis.console) {
         options = options || {};
         const enabled = options.debug === true;
@@ -324,14 +324,19 @@
         if (!/(^|\.)adulttime\.com$/i.test(page.hostname)) return null;
         if (!/^https:\/\/videothumb\.gammacdn\.com\/\d+x\d+\/\d+\.mp4$/i.test(preview)) return null;
 
-        const url = hoverPreview?.url() ??  window?.hoveredSceneUrl
-        logger.info(url)
-        logger.info('Resolved AdultTime trailer from url', { url });
+        const [pageUrl, hoverUrl] = [hoverPreview?.pageUrl(), window?.hoveredSceneUrl];
 
-        openPreviewFullscreenAT(
-            url
-        );
-        return
+        logger.info({ pageUrl, hoverUrl })
+        logger.info('Resolved AdultTime trailer from url', { pageUrl, hoverUrl });
+        const url = hoverUrl || pageUrl
+        if (!!url) {
+            if (window?.debug === true) alert(url);
+            openPreviewFullscreenAT(
+                url
+            );
+            return
+        }
+
 
         const view = doc.defaultView;
         const config = view?.env?.api?.algolia;
