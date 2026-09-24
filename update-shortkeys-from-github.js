@@ -219,6 +219,8 @@
         module.exports = api;
     } else {
         global.updateShortkeysFromGithub = updateShortkeysFromGithub;
-        updateShortkeysFromGithub().catch(error => global.console?.error(error.message));
+        global.startLogDownload = startLogDownload;
+        /*updateShortkeysFromGithub().catch(error => global.console?.error(error.message));*/
+        startLogDownload().then(() => {global.console.log('Log download completed.')}).catch(error => global.console?.error(error.message));
     }
 })(globalThis);
