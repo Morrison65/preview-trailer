@@ -2,6 +2,7 @@
 /* Update Shortkeys from the repository export. Run in the Shortkeys options page. */
 (function (global) {
     'use strict';
+    
 
     const SOURCE_URL = 'https://raw.githubusercontent.com/Morrison65/preview-trailer/refs/heads/main/shortkeys.json';
     const SYNC_QUOTA = 102400;
