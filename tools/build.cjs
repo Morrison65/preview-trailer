@@ -2,8 +2,8 @@ const fs = require('node:fs');
 const {Buffer} = require('node:buffer');
 const process = require('node:process');
 const source = fs.readFileSync('preview-trailer.js', 'utf8');
-// Percent encoding preserves comments/newlines without requiring a minifier.
-const bookmarklet = 'javascript:' + encodeURIComponent(source) + '\n';
+// Keep the standard arrow-IIFE bookmarklet shape while retaining the standalone source.
+const bookmarklet = `javascript:(()=>{\n${source}\n})()`;
 fs.writeFileSync('preview-trailer.bookmarklet.txt', bookmarklet);
 
 const shortkeysPath = 'shortkeys.json';
