@@ -7,6 +7,7 @@
     "check": "node --check preview-trailer.js && node --test test/core.test.cjs && node test/browser.cjs",
     "test": "node --test test/core.test.cjs",
     "test:browser": "node test/browser.cjs",
-    "build": "node tools/build.cjs"
+    "build": "node tools/build.cjs",
+    "release": "npm run check && npm run build"
   }
 }

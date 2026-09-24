@@ -12,6 +12,22 @@ The player offers native controls, looping, **Play with sound**, **Fullscreen**,
 
 Diagnostics are quiet by default. For troubleshooting, set `window.PreviewTrailerOptions = { debug: true }` before loading the script; it logs detection stages, adapter matches, retries, and playback setup while redacting query strings from media URLs. The file has no runtime dependencies and includes its own browser entry point, player, adapter registry, and CommonJS test export.
 
+## Legacy Differences
+
+`lagacy-preview.js` is the original direct-retrieval implementation. It remains useful as a behavioral reference, but it is not loaded by the current script.
+
+| Area | Legacy version | Current `preview-trailer.js` |
+| --- | --- | --- |
+| Entry point | Runs immediately through `scheduleRun()` and retries thrown errors. | Exposes `PreviewTrailer.run(window)` and auto-runs unless `PreviewTrailerOptions.autoRun` is `false`. |
+| Detection | Uses page-specific `if/else` branches plus broad recursive DOM fallbacks. | Uses selected hover/focus targets, bounded card traversal, generic media extraction, and the `SITE_ADAPTERS` registry. |
+| Sites | Explicitly handles TeamSkeet, Nookies, BadMommyPOV, BrattySis, and Stash. | Preserves the known card patterns, adds AdultTime, and supports future adapters without expanding the main retrieval branch. |
+| Safety | Accepts any URL recognized by `URL.canParse()` and can return the first `.mp4` it finds. | Allows only HTTP(S)/blob media, rejects credentials and executable schemes, and refuses ambiguous or unrelated cards. |
+| Player | Opens the preview URL directly, then tries to find the remote page's `<video>` to loop and request fullscreen. | Opens one same-origin blank player window first, renders controls locally, supports muted-autoplay fallback, and provides **Open original**. |
+| Retry behavior | Three retries with a recursive `setTimeout`; some errors are swallowed or alerted. | Five bounded retries for lazy sources with promise rejection, status text, and structured diagnostics. |
+| API | Global functions and implicit browser globals; no module export. | Self-contained IIFE with a browser API and CommonJS exports for testing. |
+
+Use the legacy file only when reproducing its direct-navigation or automatic-fullscreen behavior. Add new site support to `SITE_ADAPTERS` in the current file instead of adding another top-level page branch.
+
 ## Detection
 
 - Keeps the card selectors from TeamSkeet, Nookies, BadMommyPOV, BrattySis, FreeUsePorn and Bang. Uses generic video/source elements and preview/trailer data attributes on other sites.
@@ -33,6 +49,8 @@ npm run check
 npm run build
 ```
 
+`npm run build` also synchronizes [shortkeys.json](shortkeys.json) from `lagacy-preview.js` and `preview-trailer.js`, then writes [Importurl.txt](Importurl.txt) as `https://shortkeys.app/share#` plus the UTF-8 Base64 encoding of compact JSON. JSON formatting whitespace is removed only for the Base64 payload; whitespace inside shortcut fields and JavaScript strings is preserved. Run `npm run release` for the pre-release/commit check: it runs the full test suite before rebuilding all three artifacts.
+
 Set `CHROME_PATH` if Chrome/Edge is installed elsewhere. Browser checks use an isolated temporary profile and an in-memory synthetic WebM, with no downloaded analysis media retained. They cover source selection, card targeting, Stash routes, lazy-source retries, popup failure, player controls and actual local WebM playback. Headless checks permit popups/autoplay; they do not establish real-user popup permission, autoplay or fullscreen behavior on live sites.
 
 For programmatic use, set `window.PreviewTrailerOptions = { autoRun: false }` before loading the script, then call:
@@ -43,3 +61,7 @@ PreviewTrailer.retrievePreviewUrl(document, location.href); // URL or null, with
 ```
 
 Optional `run` settings: `target` (a DOM element), `retries` (0–20), and `retryDelay` (milliseconds). Call `run` directly from a click or keyboard action to retain popup permission.
+
+## Agent Release Rule
+
+For every release or before every commit that changes either JavaScript shortcut, agents must run `npm run release`. Do not edit the `code` fields in `shortkeys.json` by hand: the build replaces them from the two JavaScript source files and regenerates `Importurl.txt`. Review the generated JSON and import URL as part of the change.

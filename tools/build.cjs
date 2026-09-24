@@ -1,8 +1,24 @@
 const fs = require('node:fs');
-const path = require('node:path');
-const root = path.join(__dirname, '..');
-const source = fs.readFileSync(path.join(root, 'preview-trailer.js'), 'utf8');
+const {Buffer} = require('node:buffer');
+const process = require('node:process');
+const source = fs.readFileSync('preview-trailer.js', 'utf8');
 // Percent encoding preserves comments/newlines without requiring a minifier.
 const bookmarklet = 'javascript:' + encodeURIComponent(source) + '\n';
-fs.writeFileSync(path.join(root, 'preview-trailer.bookmarklet.txt'), bookmarklet);
-console.log('Built preview-trailer.bookmarklet.txt');
+fs.writeFileSync('preview-trailer.bookmarklet.txt', bookmarklet);
+
+const shortkeysPath = 'shortkeys.json';
+const shortkeys = JSON.parse(fs.readFileSync(shortkeysPath, 'utf8'));
+if (!Array.isArray(shortkeys) || shortkeys.length !== 2) {
+	throw new Error('shortkeys.json must contain exactly the legacy and current shortcuts.');
+}
+const legacy = shortkeys.find(shortcut => shortcut.id === '043b4e25-1841-41bd-8c6b-3ad258c8abea');
+const current = shortkeys.find(shortcut => shortcut.id === '2aecae29-6d26-4ff8-874a-140b804ccfdc');
+if (!legacy || !current) throw new Error('shortkeys.json is missing a known shortcut id.');
+legacy.code = fs.readFileSync('lagacy-preview.js', 'utf8');
+current.code = source;
+const syncedJson = JSON.stringify(shortkeys, null, 2) + '\n';
+fs.writeFileSync(shortkeysPath, syncedJson);
+
+const importPayload = Buffer.from(JSON.stringify(shortkeys), 'utf8').toString('base64');
+fs.writeFileSync('Importurl.txt', `https://shortkeys.app/share#${importPayload}`);
+process.stdout.write('Built preview-trailer.bookmarklet.txt, shortkeys.json, and Importurl.txt\n');
