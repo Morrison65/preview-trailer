@@ -31,6 +31,164 @@
             },
         },
     ];
+    function openPreviewFullscreenAT(url, win = window) {
+        const popup = win.open(
+            'about:blank',
+            '_blank',
+            'popup=yes,width=1100,height=720'
+        );
+
+        if (!popup) {
+            throw new Error('Popup blocked by browser');
+        }
+
+        const doc = popup.document;
+
+        doc.title = 'Video Preview';
+
+        doc.documentElement.style.cssText = `
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        background: #000;
+    `;
+
+        doc.body.style.cssText = `
+        margin: 0;
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+        const video = doc.createElement('video');
+
+        video.controls = true;
+        video.autoplay = true;
+        video.playsInline = true;
+        video.style.cssText = `
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        background: #000;
+    `;
+
+        doc.body.appendChild(video);
+
+        // Button is used when browser security prevents automatic fullscreen.
+        const button = doc.createElement('button');
+
+        button.textContent = '▶ Play Fullscreen';
+        button.style.cssText = `
+        position: fixed;
+        z-index: 99999;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        padding: 18px 30px;
+        font: 18px sans-serif;
+        cursor: pointer;
+    `;
+
+        doc.body.appendChild(button);
+
+        async function fullscreen() {
+            try {
+                await video.play();
+
+                if (!doc.fullscreenElement) {
+                    await video.requestFullscreen();
+                }
+
+                button.style.display = 'none';
+            } catch (err) {
+                console.warn('Automatic fullscreen/play blocked:', err);
+                button.style.display = 'block';
+            }
+        }
+
+        button.onclick = fullscreen;
+
+        // Detect HLS
+        const isHls =
+            /\.m3u8(?:$|[?#])/i.test(url) ||
+            /m3u8\.gammacdn\.com/i.test(url);
+
+        if (isHls) {
+            // Safari / browsers with native HLS
+            if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = url;
+
+                video.addEventListener(
+                    'loadedmetadata',
+                    fullscreen,
+                    { once: true }
+                );
+
+                return popup;
+            }
+
+            // Chrome / Edge: use hls.js
+            const script = doc.createElement('script');
+
+            script.src =
+                'https://cdn.jsdelivr.net/npm/hls.js@latest/dist/hls.min.js';
+
+            script.onload = () => {
+                if (!popup.Hls?.isSupported()) {
+                    console.error('HLS is not supported in this browser');
+                    return;
+                }
+
+                const hls = new popup.Hls();
+
+                hls.loadSource(url);
+                hls.attachMedia(video);
+
+                hls.on(popup.Hls.Events.MANIFEST_PARSED, () => {
+                    fullscreen();
+                });
+
+                hls.on(popup.Hls.Events.ERROR, (_, data) => {
+                    console.error('HLS error:', data);
+                });
+
+                popup.hls = hls;
+            };
+
+            doc.head.appendChild(script);
+        } else {
+            // MP4 / WebM / other browser-supported URL
+            video.src = url;
+
+            video.addEventListener(
+                'loadedmetadata',
+                fullscreen,
+                { once: true }
+            );
+        }
+
+        // Useful from console afterwards
+        popup.previewVideo = video;
+
+        return popup;
+    }
+
+    function runInAtWindow(){
+        let url = new URL(
+            performance
+                .getEntriesByType('resource')
+                .map(x => x.name)
+                .find(x => x.includes('m3u8.gammacdn.com'))
+        ).searchParams.get('u');
+
+        if (!url.isWellFormed()) url = document.querySelector('video')?.currentSrc
+
+        alert(url)
+    }
 
     function adultTimeTrailerUrl(value) {
         try {
@@ -141,13 +299,19 @@
         if (!adapter || !target?.querySelectorAll) return null;
         const card = target.closest?.(adapter.cardSelector) || target;
         const urls = candidates(card, base).filter(adapter.isPreviewUrl);
-        logger.debug(`${adapter.name} adapter found ${urls.length} candidate(s)`, {target: target.tagName, card: card.className || card.tagName});
+        logger.debug(`${adapter.name} adapter found ${urls.length} candidate(s)`, { target: target.tagName, card: card.className || card.tagName });
         return urls.length === 1 ? urls[0] : null;
     }
 
     async function resolveAdultTimeTrailer(doc, page, preview, target, logger) {
         if (!/(^|\.)adulttime\.com$/i.test(page.hostname)) return null;
         if (!/^https:\/\/videothumb\.gammacdn\.com\/\d+x\d+\/\d+\.mp4$/i.test(preview)) return null;
+
+        openPreviewFullscreenAT(
+            hoverPreview.url()
+        );
+        return
+
         const view = doc.defaultView;
         const config = view?.env?.api?.algolia;
         const clipId = preview.match(/\/(\d+)\.mp4$/)?.[1];
@@ -161,20 +325,22 @@
                     'x-algolia-application-id': config.applicationID,
                     'x-algolia-api-key': config.apiKey,
                 },
-                body: JSON.stringify({requests:[{
-                    indexName:'all_scenes_latest_desc',
-                    query:'',
-                    hitsPerPage:1000,
-                    attributesToRetrieve:['clip_id', 'trailers', 'video_formats'],
-                }]}),
+                body: JSON.stringify({
+                    requests: [{
+                        indexName: 'all_scenes_latest_desc',
+                        query: '',
+                        hitsPerPage: 1000,
+                        attributesToRetrieve: ['clip_id', 'trailers', 'video_formats'],
+                    }]
+                }),
             });
             if (!response.ok) return null;
             const payload = await response.json();
             const hit = payload?.results?.flatMap(result => result?.hits || [])
                 .find(item => String(item?.clip_id) === clipId);
             const trailer = adultTimeTrailerFromHit(hit);
-            if (trailer) logger.info('Resolved AdultTime trailer from clip metadata', {clipId, target: target?.tagName || 'none'});
-            else logger.warn('AdultTime trailer metadata unavailable; using thumbnail', {clipId});
+            if (trailer) logger.info('Resolved AdultTime trailer from clip metadata', { clipId, target: target?.tagName || 'none' });
+            else logger.warn('AdultTime trailer metadata unavailable; using thumbnail', { clipId });
             return trailer;
         } catch (error) {
             logger.debug('AdultTime trailer metadata lookup failed', error.message);
@@ -188,14 +354,14 @@
             const scene = page.pathname.match(/^\/scenes\/(\d+)(?:\/|$)/);
             if (scene) {
                 const preview = `${page.origin}/scene/${scene[1]}/preview`;
-                logger.info('Using Stash scene preview', {preview: describeUrl(preview)});
+                logger.info('Using Stash scene preview', { preview: describeUrl(preview) });
                 return preview;
             }
         }
         const base = doc.baseURI || page.href;
         const adapted = adapterPreview(doc, page, target, base, logger);
         if (adapted) {
-            logger.info('Preview found with site adapter', {site: page.hostname, preview: describeUrl(adapted)});
+            logger.info('Preview found with site adapter', { site: page.hostname, preview: describeUrl(adapted) });
             return adapted;
         }
         if (target?.querySelectorAll && target !== doc.body && target !== doc.documentElement) {
@@ -205,7 +371,7 @@
                 if (current === doc.body || current === doc.documentElement) break;
                 const urls = candidates(current, base);
                 if (urls.length === 1) {
-                    logger.info('Preview found in selected card', {preview: describeUrl(urls[0])});
+                    logger.info('Preview found in selected card', { preview: describeUrl(urls[0]) });
                     return urls[0];
                 }
                 if (urls.length > 1 || card) return null;
@@ -217,16 +383,16 @@
         if (playing.length === 1) {
             const urls = candidates(playing[0], base);
             if (urls.length === 1) {
-                logger.info('Preview found in the only playing video', {preview: describeUrl(urls[0])});
+                logger.info('Preview found in the only playing video', { preview: describeUrl(urls[0]) });
                 return urls[0];
             }
         }
         const urls = candidates(doc, base);
         if (urls.length === 1) {
-            logger.info('Preview found by document scan', {preview: describeUrl(urls[0])});
+            logger.info('Preview found by document scan', { preview: describeUrl(urls[0]) });
             return urls[0];
         }
-        logger.debug('No unique preview found', {page: describeUrl(page.href), target: target?.tagName || 'none', candidates: urls.length});
+        logger.debug('No unique preview found', { page: describeUrl(page.href), target: target?.tagName || 'none', candidates: urls.length });
         return null;
     }
 
@@ -272,7 +438,7 @@
         footer.append(status, play, fullscreen, original);
         doc.body.replaceChildren(video, footer);
         video.addEventListener('error', () => {
-            logger.warn('Preview playback failed', {preview: describeUrl(video.src)});
+            logger.warn('Preview playback failed', { preview: describeUrl(video.src) });
             status.textContent = 'This preview could not play here. Try Open original.';
         });
         return {
@@ -304,7 +470,7 @@
         const target = options.target || selectTarget(doc);
         const pageUrl = win.location.href;
         const page = new URL(pageUrl);
-        logger.info('Starting', {page: describeUrl(pageUrl), target: target?.tagName || 'none'});
+        logger.info('Starting', { page: describeUrl(pageUrl), target: target?.tagName || 'none' });
         let preview = retrievePreviewUrl(doc, pageUrl, target, logger);
         // Reserve exactly one popup during the triggering user gesture, before retries.
         const popup = win.open('about:blank', '_blank', 'popup=yes,width=1100,height=720');
@@ -334,15 +500,15 @@
                 preview = trailer || preview;
                 if (preview) {
                     player.load(preview);
-                    logger.info('Loading preview', {preview: describeUrl(preview), attempt: count + 1});
+                    logger.info('Loading preview', { preview: describeUrl(preview), attempt: count + 1 });
                     resolve({ preview, previewWindow: popup });
                 } else if (count < retries) {
-                    logger.debug('Preview not ready; retrying', {attempt: count + 1, retries});
+                    logger.debug('Preview not ready; retrying', { attempt: count + 1, retries });
                     win.setTimeout(() => attempt(count + 1), retryDelay);
                 } else {
                     const message = 'No unique preview found. Hover a video card or focus its link, then run again.';
                     player.status.textContent = message;
-                    logger.warn(message, {attempts: count + 1});
+                    logger.warn(message, { attempts: count + 1 });
                     reject(new Error(message));
                 }
             }
