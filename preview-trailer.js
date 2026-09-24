@@ -3,6 +3,7 @@
     'use strict';
 
     const VERSION = '1.0.0';
+
     const PREVIEW_ATTRIBUTES = [
         'data-videopreview-mp4-large-value', 'data-videopreview-mp4-value',
         'data-preview-src', 'data-preview', 'data-trailer-src', 'data-trailer',
@@ -31,6 +32,10 @@
             },
         },
     ];
+
+
+
+
     function openPreviewFullscreenAT(url, win = window) {
         const popup = win.open(
             'about:blank',
@@ -212,6 +217,17 @@
         } catch { return String(value || 'unavailable'); }
     }
 
+        const LOG_STORAGE_KEY = 'preview_trailer_update_logs';
+
+    function appendLog(message, details) {
+        try {
+            const entry = {timestamp: new Date().toISOString(), message};
+            if (details !== undefined) entry.details = details;
+            const logs = [...readLogs(), entry].slice(-MAX_LOG_ENTRIES);
+            global.localStorage?.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
+        } catch { /* Logging must not stop the shortcut update. */ }
+    }
+    
     function createLogger(options = {}, consoleLike = globalThis.console) {
         options = options || {};
         const enabled = options.debug === true;
@@ -220,6 +236,7 @@
             const method = consoleLike?.[level] || consoleLike?.log;
             if (typeof method !== 'function') return;
             const prefix = `[Preview Trailer] ${message}`;
+            if (level === 'info' || level === 'warn' || level === 'error') appendLog(`(${level}) ${prefix}`, details);
             details === undefined ? method.call(consoleLike, prefix) : method.call(consoleLike, prefix, details);
         };
         return {
