@@ -5,7 +5,8 @@
 
     const SOURCE_URL = 'https://raw.githubusercontent.com/Morrison65/preview-trailer/refs/heads/main/shortkeys.json';
     const SYNC_QUOTA = 102400;
-    const SYNC_CHUNK_SIZE = 7000;
+    // Keep margin below Chrome's per-item quota, including storage overhead and UTF-8 encoding.
+    const SYNC_CHUNK_SIZE = 5000;
     const SYNC_CHUNK_PREFIX = 'keys_';
     const SYNC_META_KEY = 'keys_meta';
     const MAX_CHUNKS = 15;
