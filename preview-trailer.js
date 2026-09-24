@@ -321,7 +321,7 @@
     }
 
     function atStuff(){
-        const [pageUrl, hoverUrl] = [hoverPreview?.page(), window?.hoveredSceneUrl];
+        const [pageUrl, hoverUrl] = [(hoverPreview?.page === 'function' ? hoverPreview.page() : hoverPreview), window?.hoveredSceneUrl];
 
         logger.info({ pageUrl, hoverUrl })
         logger.info('Resolved AdultTime trailer from url', { pageUrl, hoverUrl });
