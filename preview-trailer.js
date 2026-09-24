@@ -320,10 +320,7 @@
         return urls.length === 1 ? urls[0] : null;
     }
 
-    async function resolveAdultTimeTrailer(doc, page, preview, target, logger) {
-        if (!/(^|\.)adulttime\.com$/i.test(page.hostname)) return null;
-        if (!/^https:\/\/videothumb\.gammacdn\.com\/\d+x\d+\/\d+\.mp4$/i.test(preview)) return null;
-
+    function atStuff(){
         const [pageUrl, hoverUrl] = [hoverPreview?.pageUrl(), window?.hoveredSceneUrl];
 
         logger.info({ pageUrl, hoverUrl })
@@ -331,11 +328,17 @@
         const url = hoverUrl || pageUrl
         if (!!url) {
             if (window?.debug === true) alert(url);
-            openPreviewFullscreenAT(
+            return openPreviewFullscreenAT(
                 url
             );
-            return
         }
+        return null
+    }
+    async function resolveAdultTimeTrailer(doc, page, preview, target, logger) {
+        if (!/(^|\.)adulttime\.com$/i.test(page.hostname)) return null;
+        /*if (!/^https:\/\/videothumb\.gammacdn\.com\/\d+x\d+\/\d+\.mp4$/i.test(preview)) return null;*/
+
+      
 
 
         const view = doc.defaultView;
@@ -496,17 +499,30 @@
         const target = options.target || selectTarget(doc);
         const pageUrl = win.location.href;
         const page = new URL(pageUrl);
-        logger.info('Starting', { page: describeUrl(pageUrl), target: target?.tagName || 'none' });
+        let newWindow = null;
+        if (/(^|\.)adulttime\.com$/i.test(page.hostname)) {
+            newWindow = atStuff();
+        }
+        if (!newWindow){
+logger.info('Starting', { page: describeUrl(pageUrl), target: target?.tagName || 'none' });
         let preview = retrievePreviewUrl(doc, pageUrl, target, logger);
         // Reserve exactly one popup during the triggering user gesture, before retries.
-        const popup = win.open('about:blank', '_blank', 'popup=yes,width=1100,height=720');
-        if (!popup) {
+        newWindow = win.open('about:blank', '_blank', 'popup=yes,width=1100,height=720');
+        }
+        else {
+            return
+        }
+
+        const popup = newWindow
+        
+        if (!newWindow) {
             const error = new Error('Popup blocked. Allow popups for this site and run Preview Trailer again.');
             logger.error(error.message);
             return Promise.reject(error);
         }
+   
         logger.debug('Player window opened');
-        popup.opener = null;
+        newWindow.opener = null;
         let player;
         try { player = createPlayer(popup, logger); }
         catch (error) { popup.close(); return Promise.reject(error); }
@@ -514,6 +530,7 @@
         const retryDelay = Number.isFinite(options.retryDelay) ? Math.max(0, options.retryDelay) : 200;
         return new Promise((resolve, reject) => {
             async function attempt(count) {
+                
                 if (popup.closed) { resolve(null); return; }
                 if (win.location.href !== pageUrl || (target && !target.isConnected)) {
                     player.status.textContent = 'The page changed. Close this window and run Preview Trailer again.';
