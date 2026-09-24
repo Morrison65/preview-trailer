@@ -10,6 +10,8 @@ For a bookmark, run `npm run build`, create a bookmark, and paste the full conte
 
 The player offers native controls, looping, **Play with sound**, **Fullscreen**, and **Open original**. Allow popups for the page if prompted. Autoplay may start muted; fullscreen requires clicking its button. This is a one-shot script, not a script that opens windows automatically on every page load or hover.
 
+Diagnostics are quiet by default. For troubleshooting, set `window.PreviewTrailerOptions = { debug: true }` before loading the script; it logs detection stages, adapter matches, retries, and playback setup while redacting query strings from media URLs. The file has no runtime dependencies and includes its own browser entry point, player, adapter registry, and CommonJS test export.
+
 ## Detection
 
 - Keeps the card selectors from TeamSkeet, Nookies, BadMommyPOV, BrattySis, FreeUsePorn and Bang. Uses generic video/source elements and preview/trailer data attributes on other sites.

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {mediaUrl, sourceOf, SITE_ADAPTERS} = require('../preview-trailer.js');
+const {mediaUrl, sourceOf, SITE_ADAPTERS, describeUrl, createLogger} = require('../preview-trailer.js');
 const base = 'https://example.test/clips/42';
 
 test('relative, protocol-relative, signed and uppercase media URLs', () => {
@@ -32,4 +32,12 @@ test('site adapters are extensible and identify AdultTime trailers', () => {
     assert.equal(adultTime.matches(new URL('https://adulttime.com.attacker.test/')), false);
     assert.equal(adultTime.isPreviewUrl('https://videothumb.gammacdn.com/500x281/288813.mp4'), true);
     assert.equal(adultTime.isPreviewUrl('https://streaming-hls.gammacdn.com/fame/video.m3u8'), false);
+});
+test('standalone diagnostics are quiet by default and redact URL credentials', () => {
+    const calls = [];
+    const consoleLike = {debug: (...args) => calls.push(['debug', ...args]), info: (...args) => calls.push(['info', ...args])};
+    createLogger({}, consoleLike).debug('hidden');
+    createLogger({debug:true}, consoleLike).info('preview', {preview: describeUrl('https://cdn.test/trailer.mp4?Policy=secret')});
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0], ['info', '[Preview Trailer] preview', {preview:'https://cdn.test/trailer.mp4'}]);
 });

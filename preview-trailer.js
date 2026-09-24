@@ -32,6 +32,31 @@
         },
     ];
 
+    function describeUrl(value) {
+        try {
+            const url = new URL(value);
+            return `${url.origin}${url.pathname}`;
+        } catch { return String(value || 'unavailable'); }
+    }
+
+    function createLogger(options = {}, consoleLike = globalThis.console) {
+        options = options || {};
+        const enabled = options.debug === true;
+        const write = (level, message, details) => {
+            if (level === 'debug' && !enabled) return;
+            const method = consoleLike?.[level] || consoleLike?.log;
+            if (typeof method !== 'function') return;
+            const prefix = `[Preview Trailer] ${message}`;
+            details === undefined ? method.call(consoleLike, prefix) : method.call(consoleLike, prefix, details);
+        };
+        return {
+            debug: (message, details) => write('debug', message, details),
+            info: (message, details) => write('info', message, details),
+            warn: (message, details) => write('warn', message, details),
+            error: (message, details) => write('error', message, details),
+        };
+    }
+
     function mediaUrl(value, base, explicit = false) {
         if (typeof value !== 'string' || !value.trim()) return null;
         try {
@@ -96,30 +121,41 @@
         return hover || (active !== doc.body && active !== doc.documentElement ? active : null);
     }
 
-    function adapterPreview(doc, page, target, base) {
+    function adapterPreview(doc, page, target, base, logger) {
         const adapter = SITE_ADAPTERS.find(candidate => candidate.matches(page));
         if (!adapter || !target?.querySelectorAll) return null;
         const card = target.closest?.(adapter.cardSelector) || target;
         const urls = candidates(card, base).filter(adapter.isPreviewUrl);
+        logger.debug(`${adapter.name} adapter found ${urls.length} candidate(s)`, {target: target.tagName, card: card.className || card.tagName});
         return urls.length === 1 ? urls[0] : null;
     }
 
-    function retrievePreviewUrl(doc, pageUrl, target = selectTarget(doc)) {
+    function retrievePreviewUrl(doc, pageUrl, target = selectTarget(doc), logger = createLogger()) {
         const page = new URL(pageUrl);
         if (['localhost', '127.0.0.1', '[::1]'].includes(page.hostname) && page.port === '9999') {
             const scene = page.pathname.match(/^\/scenes\/(\d+)(?:\/|$)/);
-            if (scene) return `${page.origin}/scene/${scene[1]}/preview`;
+            if (scene) {
+                const preview = `${page.origin}/scene/${scene[1]}/preview`;
+                logger.info('Using Stash scene preview', {preview: describeUrl(preview)});
+                return preview;
+            }
         }
         const base = doc.baseURI || page.href;
-        const adapted = adapterPreview(doc, page, target, base);
-        if (adapted) return adapted;
+        const adapted = adapterPreview(doc, page, target, base, logger);
+        if (adapted) {
+            logger.info('Preview found with site adapter', {site: page.hostname, preview: describeUrl(adapted)});
+            return adapted;
+        }
         if (target?.querySelectorAll && target !== doc.body && target !== doc.documentElement) {
             const card = target.closest?.(CARD_SELECTOR);
             let current = card || target;
             for (let depth = 0; current && depth < 6; depth++, current = current.parentElement) {
                 if (current === doc.body || current === doc.documentElement) break;
                 const urls = candidates(current, base);
-                if (urls.length === 1) return urls[0];
+                if (urls.length === 1) {
+                    logger.info('Preview found in selected card', {preview: describeUrl(urls[0])});
+                    return urls[0];
+                }
                 if (urls.length > 1 || card) return null;
             }
             // A selected card with no URL must not fall through to another card.
@@ -128,13 +164,21 @@
         const playing = [...doc.querySelectorAll('video')].filter(video => !video.paused && !video.ended);
         if (playing.length === 1) {
             const urls = candidates(playing[0], base);
-            if (urls.length === 1) return urls[0];
+            if (urls.length === 1) {
+                logger.info('Preview found in the only playing video', {preview: describeUrl(urls[0])});
+                return urls[0];
+            }
         }
         const urls = candidates(doc, base);
-        return urls.length === 1 ? urls[0] : null;
+        if (urls.length === 1) {
+            logger.info('Preview found by document scan', {preview: describeUrl(urls[0])});
+            return urls[0];
+        }
+        logger.debug('No unique preview found', {page: describeUrl(page.href), target: target?.tagName || 'none', candidates: urls.length});
+        return null;
     }
 
-    function createPlayer(popup) {
+    function createPlayer(popup, logger) {
         const doc = popup.document;
         doc.title = 'Preview Trailer';
         const style = doc.createElement('style');
@@ -157,7 +201,10 @@
         play.textContent = 'Play with sound';
         play.addEventListener('click', () => {
             video.muted = false;
-            video.play().catch(() => { status.textContent = 'Playback unavailable. Try Open original.'; });
+            video.play().catch(error => {
+                logger.warn('Sound playback was rejected', error.message);
+                status.textContent = 'Playback unavailable. Try Open original.';
+            });
         });
         const fullscreen = doc.createElement('button');
         fullscreen.textContent = 'Fullscreen';
@@ -172,7 +219,10 @@
         original.hidden = true;
         footer.append(status, play, fullscreen, original);
         doc.body.replaceChildren(video, footer);
-        video.addEventListener('error', () => { status.textContent = 'This preview could not play here. Try Open original.'; });
+        video.addEventListener('error', () => {
+            logger.warn('Preview playback failed', {preview: describeUrl(video.src)});
+            status.textContent = 'This preview could not play here. Try Open original.';
+        });
         return {
             status,
             load(url) {
@@ -195,17 +245,25 @@
     }
 
     function run(win, options = {}) {
+        options = options || {};
         const doc = win.document;
+        const logger = createLogger(options, win.console);
         // Capture hover before opening a new window moves focus away from the page.
         const target = options.target || selectTarget(doc);
         const pageUrl = win.location.href;
-        let preview = retrievePreviewUrl(doc, pageUrl, target);
+        logger.info('Starting', {page: describeUrl(pageUrl), target: target?.tagName || 'none'});
+        let preview = retrievePreviewUrl(doc, pageUrl, target, logger);
         // Reserve exactly one popup during the triggering user gesture, before retries.
         const popup = win.open('about:blank', '_blank', 'popup=yes,width=1100,height=720');
-        if (!popup) return Promise.reject(new Error('Popup blocked. Allow popups for this site and run Preview Trailer again.'));
+        if (!popup) {
+            const error = new Error('Popup blocked. Allow popups for this site and run Preview Trailer again.');
+            logger.error(error.message);
+            return Promise.reject(error);
+        }
+        logger.debug('Player window opened');
         popup.opener = null;
         let player;
-        try { player = createPlayer(popup); }
+        try { player = createPlayer(popup, logger); }
         catch (error) { popup.close(); return Promise.reject(error); }
         const retries = Number.isInteger(options.retries) ? Math.max(0, Math.min(options.retries, 20)) : 5;
         const retryDelay = Number.isFinite(options.retryDelay) ? Math.max(0, options.retryDelay) : 200;
@@ -214,18 +272,22 @@
                 if (popup.closed) { resolve(null); return; }
                 if (win.location.href !== pageUrl || (target && !target.isConnected)) {
                     player.status.textContent = 'The page changed. Close this window and run Preview Trailer again.';
+                    logger.warn('Selected page or card changed while waiting for preview');
                     reject(new Error('The selected page or card changed.'));
                     return;
                 }
-                preview = preview || retrievePreviewUrl(doc, pageUrl, target);
+                preview = preview || retrievePreviewUrl(doc, pageUrl, target, logger);
                 if (preview) {
                     player.load(preview);
+                    logger.info('Loading preview', {preview: describeUrl(preview), attempt: count + 1});
                     resolve({ preview, previewWindow: popup });
                 } else if (count < retries) {
+                    logger.debug('Preview not ready; retrying', {attempt: count + 1, retries});
                     win.setTimeout(() => attempt(count + 1), retryDelay);
                 } else {
                     const message = 'No unique preview found. Hover a video card or focus its link, then run again.';
                     player.status.textContent = message;
+                    logger.warn(message, {attempts: count + 1});
                     reject(new Error(message));
                 }
             }
@@ -233,14 +295,14 @@
         });
     }
 
-    const api = { version: VERSION, mediaUrl, sourceOf, candidates, retrievePreviewUrl, selectTarget, run, SITE_ADAPTERS };
+    const api = { version: VERSION, mediaUrl, sourceOf, candidates, retrievePreviewUrl, selectTarget, run, SITE_ADAPTERS, describeUrl, createLogger };
     if (typeof module === 'object' && module.exports && typeof window === 'undefined') {
         module.exports = api;
     } else {
         window.PreviewTrailer = api;
         if (window.PreviewTrailerOptions?.autoRun !== false) {
             run(window, window.PreviewTrailerOptions).catch(error => {
-                console.warn('[Preview Trailer]', error.message);
+                createLogger(window.PreviewTrailerOptions, window.console).error('Run failed', error.message);
                 if (error.message.startsWith('Popup blocked')) window.alert(error.message);
             });
         }
