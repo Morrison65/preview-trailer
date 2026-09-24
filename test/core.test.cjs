@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {mediaUrl, sourceOf, SITE_ADAPTERS, describeUrl, createLogger} = require('../preview-trailer.js');
+const {mediaUrl, sourceOf, SITE_ADAPTERS, describeUrl, createLogger, adultTimeTrailerFromHit} = require('../preview-trailer.js');
 const base = 'https://example.test/clips/42';
 
 test('relative, protocol-relative, signed and uppercase media URLs', () => {
@@ -32,6 +32,14 @@ test('site adapters are extensible and identify AdultTime trailers', () => {
     assert.equal(adultTime.matches(new URL('https://adulttime.com.attacker.test/')), false);
     assert.equal(adultTime.isPreviewUrl('https://videothumb.gammacdn.com/500x281/288813.mp4'), true);
     assert.equal(adultTime.isPreviewUrl('https://streaming-hls.gammacdn.com/fame/video.m3u8'), false);
+});
+test('AdultTime clip metadata resolves the 720p trailer instead of the thumbnail', () => {
+    const trailer = adultTimeTrailerFromHit({
+        clip_id: 288853,
+        movie_id: 162886,
+        trailers: {'720p':'https://trailers-fame.gammacdn.com/6/8/8/2/6/c162886/trailers/162886_01/tr_162886_01_720p.mp4'},
+    });
+    assert.equal(trailer, 'https://trailers-fame.gammacdn.com/6/8/8/2/6/c162886/trailers/162886_01/tr_162886_01_720p.mp4');
 });
 test('standalone diagnostics are quiet by default and redact URL credentials', () => {
     const calls = [];

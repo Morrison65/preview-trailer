@@ -31,7 +31,7 @@ Use the legacy file only when reproducing its direct-navigation or automatic-ful
 ## Detection
 
 - Keeps the card selectors from TeamSkeet, Nookies, BadMommyPOV, BrattySis, FreeUsePorn and Bang. Uses generic video/source elements and preview/trailer data attributes on other sites.
-- Includes an adapter registry in `preview-trailer.js`. AdultTime matches `*.adulttime.com`, scopes lookup to its `SceneThumb` card, and accepts Gamma's `videothumb.gammacdn.com/<size>/<id>.mp4` trailer URLs. Add another same-pattern site by appending an object with `name`, `matches(page)`, `cardSelector`, and `isPreviewUrl(url)` to `SITE_ADAPTERS`.
+- Includes an adapter registry in `preview-trailer.js`. AdultTime matches `*.adulttime.com`, scopes lookup to its `SceneThumb` card, resolves the thumbnail clip ID through the page's Algolia metadata, and prefers the returned `trailers-fame.gammacdn.com` 720p trailer. The thumbnail remains a fallback when metadata is unavailable. Add another same-pattern site by appending an object with `name`, `matches(page)`, `cardSelector`, and `isPreviewUrl(url)` to `SITE_ADAPTERS`.
 - Supports local Stash scene pages on port 9999, including localhost, 127.0.0.1 and IPv6 loopback.
 - Handles relative URLs, query strings, uppercase extensions, lazy sources, multiple video source alternatives, and explicit extensionless media URLs.
 - Captures the selected card before opening the popup and retries five times at 200 ms intervals for lazy previews. Stops if the card is removed or the page URL changes.

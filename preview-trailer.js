@@ -32,6 +32,21 @@
         },
     ];
 
+    function adultTimeTrailerUrl(value) {
+        try {
+            const url = new URL(value);
+            if (url.hostname !== 'trailers-fame.gammacdn.com') return null;
+            return /\/c\d+\/trailers\/[^/]+\/tr_[^/]+_720p\.mp4$/i.test(url.pathname) ? url.href : null;
+        } catch { return null; }
+    }
+
+    function adultTimeTrailerFromHit(hit) {
+        const direct = adultTimeTrailerUrl(Object.getOwnPropertyDescriptor(hit?.trailers, '720p')?.value);
+        if (direct) return direct;
+        const format = hit?.video_formats?.find(item => item?.format === '720p');
+        return adultTimeTrailerUrl(format?.trailer_url);
+    }
+
     function describeUrl(value) {
         try {
             const url = new URL(value);
@@ -128,6 +143,37 @@
         const urls = candidates(card, base).filter(adapter.isPreviewUrl);
         logger.debug(`${adapter.name} adapter found ${urls.length} candidate(s)`, {target: target.tagName, card: card.className || card.tagName});
         return urls.length === 1 ? urls[0] : null;
+    }
+
+    async function resolveAdultTimeTrailer(doc, page, preview, target, logger) {
+        if (!/(^|\.)adulttime\.com$/i.test(page.hostname)) return null;
+        if (!/^https:\/\/videothumb\.gammacdn\.com\/\d+x\d+\/\d+\.mp4$/i.test(preview)) return null;
+        const view = doc.defaultView;
+        const config = view?.env?.api?.algolia;
+        const clipId = preview.match(/\/(\d+)\.mp4$/)?.[1];
+        if (!config?.applicationID || !config.apiKey || !clipId || typeof view?.fetch !== 'function') return null;
+        try {
+            const endpoint = `https://${config.applicationID.toLowerCase()}-dsn.algolia.net/1/indexes/*/queries`;
+            const response = await view.fetch(endpoint, {
+                method: 'POST',
+                headers: {
+                    'content-type': 'application/json',
+                    'x-algolia-application-id': config.applicationID,
+                    'x-algolia-api-key': config.apiKey,
+                },
+                body: JSON.stringify({requests:[{indexName:'all_scenes_latest_desc', query:clipId, hitsPerPage:20}]}),
+            });
+            if (!response.ok) return null;
+            const payload = await response.json();
+            const hit = payload?.results?.flatMap(result => result?.hits || [])
+                .find(item => String(item?.clip_id) === clipId);
+            const trailer = adultTimeTrailerFromHit(hit);
+            if (trailer) logger.info('Resolved AdultTime trailer from clip metadata', {clipId, target: target?.tagName || 'none'});
+            return trailer;
+        } catch (error) {
+            logger.debug('AdultTime trailer metadata lookup failed', error.message);
+            return null;
+        }
     }
 
     function retrievePreviewUrl(doc, pageUrl, target = selectTarget(doc), logger = createLogger()) {
@@ -251,6 +297,7 @@
         // Capture hover before opening a new window moves focus away from the page.
         const target = options.target || selectTarget(doc);
         const pageUrl = win.location.href;
+        const page = new URL(pageUrl);
         logger.info('Starting', {page: describeUrl(pageUrl), target: target?.tagName || 'none'});
         let preview = retrievePreviewUrl(doc, pageUrl, target, logger);
         // Reserve exactly one popup during the triggering user gesture, before retries.
@@ -268,7 +315,7 @@
         const retries = Number.isInteger(options.retries) ? Math.max(0, Math.min(options.retries, 20)) : 5;
         const retryDelay = Number.isFinite(options.retryDelay) ? Math.max(0, options.retryDelay) : 200;
         return new Promise((resolve, reject) => {
-            function attempt(count) {
+            async function attempt(count) {
                 if (popup.closed) { resolve(null); return; }
                 if (win.location.href !== pageUrl || (target && !target.isConnected)) {
                     player.status.textContent = 'The page changed. Close this window and run Preview Trailer again.';
@@ -277,6 +324,8 @@
                     return;
                 }
                 preview = preview || retrievePreviewUrl(doc, pageUrl, target, logger);
+                const trailer = await resolveAdultTimeTrailer(doc, page, preview, target, logger);
+                preview = trailer || preview;
                 if (preview) {
                     player.load(preview);
                     logger.info('Loading preview', {preview: describeUrl(preview), attempt: count + 1});
@@ -295,7 +344,7 @@
         });
     }
 
-    const api = { version: VERSION, mediaUrl, sourceOf, candidates, retrievePreviewUrl, selectTarget, run, SITE_ADAPTERS, describeUrl, createLogger };
+    const api = { version: VERSION, mediaUrl, sourceOf, candidates, retrievePreviewUrl, selectTarget, run, SITE_ADAPTERS, describeUrl, createLogger, adultTimeTrailerFromHit };
     if (typeof module === 'object' && module.exports && typeof window === 'undefined') {
         module.exports = api;
     } else {
