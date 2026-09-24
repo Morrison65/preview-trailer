@@ -1,5 +1,7 @@
 # Agent Release Instructions
 
+When the requested work is complete and all tests pass, agents must run `npm run release`, review the generated artifacts, create the commit, and push it to the configured remote. Keep this order: tests, release build, artifact review, commit, then push. Do not commit or push while tests are failing.
+
 The optional `update-shortkeys-from-github.js` script is for the Shortkeys options page. It fetches the published `shortkeys.json` and updates Shortkeys storage; it is not a Node CLI and must not be run on an ordinary website.
 
 Before every commit or release that changes either JavaScript shortcut, run:

@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install browser test dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y chromium ffmpeg
+
+      - name: Run tests and build artifacts
+        run: npm run release
+
+      - name: Verify generated artifacts are present
+        run: test -s shortkeys.json && test -s Importurl.txt && test -s preview-trailer.bookmarklet.txt

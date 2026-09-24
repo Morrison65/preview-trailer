@@ -1,13 +1,26 @@
+/* global __dirname, process, setTimeout, clearTimeout, console */
 const fs = require('node:fs');
 const path = require('node:path');
 const os = require('node:os');
 const http = require('node:http');
 const {spawn, spawnSync} = require('node:child_process');
 const root = path.join(__dirname, '..');
-const browser = process.env.CHROME_PATH || [
+const browserCandidates = process.platform === 'win32' ? [
     'C:/Program Files/Google/Chrome/Application/chrome.exe',
     'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe',
-].find(file => fs.existsSync(file));
+    'C:/Program Files (x86)/Google/Chrome/Application/chrome.exe',
+] : [
+    '/usr/bin/google-chrome',
+    '/usr/bin/chromium',
+    '/usr/bin/chromium-browser',
+    '/usr/bin/microsoft-edge',
+];
+// The candidate paths are fixed local browser locations, not user input.
+const browser = process.env.CHROME_PATH || browserCandidates.find(file => fs.existsSync(file)) // eslint-disable-line security/detect-non-literal-fs-filename
+    || ['google-chrome', 'chromium', 'chromium-browser', 'microsoft-edge'].map(command => {
+        const result = spawnSync(process.platform === 'win32' ? 'where' : 'which', [command], {encoding:'utf8', windowsHide:true});
+        return result.status === 0 ? result.stdout.trim().split(/\r?\n/)[0] : null;
+    }).find(Boolean);
 if (!browser) throw new Error('Set CHROME_PATH to a Chrome/Edge executable.');
 const generated = spawnSync('ffmpeg', ['-v','error','-f','lavfi','-i','color=c=blue:s=160x90:r=10',
     '-t','0.5','-an','-c:v','libvpx','-f','webm','pipe:1'], {windowsHide:true});
@@ -63,9 +76,11 @@ const server = http.createServer((req, res) => {
         const resolvedProfile = path.resolve(profile);
         if (path.dirname(resolvedProfile) !== path.resolve(os.tmpdir())
             || !path.basename(resolvedProfile).startsWith('preview-trailer-test-')) {
-            throw new Error('Refusing to remove a profile outside the dedicated test directory.');
+            console.error('Refusing to remove a profile outside the dedicated test directory.');
+            process.exitCode = 1;
+        } else {
+            try { fs.rmSync(resolvedProfile, {recursive:true, force:true, maxRetries:3, retryDelay:100}); }
+            catch { console.warn('Chrome profile still in use:', profile); }
         }
-        try { fs.rmSync(resolvedProfile, {recursive:true, force:true, maxRetries:3, retryDelay:100}); }
-        catch { console.warn('Chrome profile still in use:', profile); }
     }
 })();
