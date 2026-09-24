@@ -8,14 +8,16 @@ fs.writeFileSync('preview-trailer.bookmarklet.txt', bookmarklet);
 
 const shortkeysPath = 'shortkeys.json';
 const shortkeys = JSON.parse(fs.readFileSync(shortkeysPath, 'utf8'));
-if (!Array.isArray(shortkeys) || shortkeys.length !== 2) {
-	throw new Error('shortkeys.json must contain exactly the legacy and current shortcuts.');
+if (!Array.isArray(shortkeys) || shortkeys.length !== 3) {
+	throw new Error('shortkeys.json must contain the legacy, current, and updater shortcuts.');
 }
 const legacy = shortkeys.find(shortcut => shortcut.id === '043b4e25-1841-41bd-8c6b-3ad258c8abea');
 const current = shortkeys.find(shortcut => shortcut.id === '2aecae29-6d26-4ff8-874a-140b804ccfdc');
-if (!legacy || !current) throw new Error('shortkeys.json is missing a known shortcut id.');
+const updater = shortkeys.find(shortcut => shortcut.id === 'b73617bb-9758-4b74-a643-5fd2299733de');
+if (!legacy || !current || !updater) throw new Error('shortkeys.json is missing a known shortcut id.');
 legacy.code = fs.readFileSync('lagacy-preview.js', 'utf8');
 current.code = source;
+updater.code = fs.readFileSync('update-shortkeys-from-github.js', 'utf8');
 const syncedJson = JSON.stringify(shortkeys, null, 2) + '\n';
 fs.writeFileSync(shortkeysPath, syncedJson);
 
