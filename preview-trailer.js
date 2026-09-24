@@ -320,7 +320,7 @@
         return urls.length === 1 ? urls[0] : null;
     }
 
-    function atStuff(){
+    function atStuff(logger = createLogger()) {
         const [pageUrl, hoverUrl] = [(hoverPreview?.page === 'function' ? hoverPreview.page() : hoverPreview), window?.hoveredSceneUrl];
 
         logger.info({ pageUrl, hoverUrl })
