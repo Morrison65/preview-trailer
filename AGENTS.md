@@ -1,5 +1,7 @@
 # Agent Release Instructions
 
+The optional `update-shortkeys-from-github.js` script is for the Shortkeys options page. It fetches the published `shortkeys.json` and updates Shortkeys storage; it is not a Node CLI and must not be run on an ordinary website.
+
 Before every commit or release that changes either JavaScript shortcut, run:
 
 ```powershell
