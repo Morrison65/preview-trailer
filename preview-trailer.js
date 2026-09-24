@@ -320,15 +320,16 @@
         return urls.length === 1 ? urls[0] : null;
     }
 
-    function atStuff(logger = createLogger()) {
+    function atStuff(logger = createLogger(),win = windows) {
         const [pageUrl, hoverUrl] = [(hoverPreview?.page === 'function' ? hoverPreview.page() : hoverPreview), window?.hoveredSceneUrl];
 
         logger?.info('Resolved AdultTime trailer from url', { pageUrl, hoverUrl });
-        const url = hoverUrl || pageUrl
+        const url = hoverUrl ?? pageUrl
         if (!!url) {
-            if (window?.debug === true) alert(url);
+            if (globalThis?.debug === true ) alert(url);
             return openPreviewFullscreenAT(
-                url
+                url,
+                win
             );
         }
         return null
@@ -500,7 +501,7 @@
         const page = new URL(pageUrl);
         let newWindow = null;
         if (/(^|\.)adulttime\.com$/i.test(page.hostname)) {
-            newWindow = atStuff(logger);
+            newWindow = atStuff(logger,win);
         }
         if (!newWindow){
 logger.info('Starting', { page: describeUrl(pageUrl), target: target?.tagName || 'none' });
