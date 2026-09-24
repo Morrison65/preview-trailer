@@ -6,6 +6,16 @@ const source = fs.readFileSync('preview-trailer.js', 'utf8');
 const bookmarklet = `javascript:(()=>{\n${source}\n})()`;
 fs.writeFileSync('preview-trailer.bookmarklet.txt', bookmarklet);
 
+
+function getSnippet(url = "") {
+    return "(async () => {    const url =        '" + url + "';    const response = await fetch(url, {        cache: 'no-store'    });    if (!response.ok) {        throw new Error(            `Failed to load updater: HTTP ${response.status}`        );    }    const code = await response.text();    console.log(        `Loaded ${code.length} bytes from GitHub`    );    (0, eval)(        `${code}\n//# sourceURL=update-shortkeys-from-github.js`    );})();"
+}
+
+function getCodeForFilename(filename){
+    return getSnippet("https://raw.githubusercontent.com/Morrison65/preview-trailer/refs/heads/main/"+filename);
+
+}
+
 const shortkeysPath = 'shortkeys.json';
 const shortkeys = JSON.parse(fs.readFileSync(shortkeysPath, 'utf8'));
 if (!Array.isArray(shortkeys) || shortkeys.length !== 3) {
@@ -15,9 +25,9 @@ const legacy = shortkeys.find(shortcut => shortcut.id === '043b4e25-1841-41bd-8c
 const current = shortkeys.find(shortcut => shortcut.id === '2aecae29-6d26-4ff8-874a-140b804ccfdc');
 const updater = shortkeys.find(shortcut => shortcut.id === 'b73617bb-9758-4b74-a643-5fd2299733de');
 if (!legacy || !current || !updater) throw new Error('shortkeys.json is missing a known shortcut id.');
-legacy.code = fs.readFileSync('lagacy-preview.js', 'utf8');
-current.code = source;
-updater.code = fs.readFileSync('update-shortkeys-from-github.js', 'utf8');
+legacy.code = getCodeForFilename('lagacy-preview.js');
+current.code = getCodeForFilename('preview-trailer.js');
+updater.code = getCodeForFilename('update-shortkeys-from-github.js');
 const syncedJson = JSON.stringify(shortkeys, null, 2) + '\n';
 fs.writeFileSync(shortkeysPath, syncedJson);
 
