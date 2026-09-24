@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {normalizeShortcuts, replaceShortcuts, readLogs, appendLog, clearLogs} = require('../update-shortkeys-from-github.js');
+const {normalizeShortcuts, deleteExistingShortcuts, replaceShortcuts, readLogs, appendLog, clearLogs} = require('../update-shortkeys-from-github.js');
 
 test('GitHub shortcut updates use Shortkeys normalization rules', () => {
     const shortcuts = normalizeShortcuts([
@@ -37,6 +37,22 @@ test('GitHub updates replace the complete shortcut list in sync and local storag
     assert.equal(localWrites[0].keys, json);
     assert.ok(syncRemovals[0].includes('keys'));
     assert.ok(syncRemovals[0].includes('keys_1'));
+});
+
+test('GitHub import deletes and verifies existing sync and local shortcuts first', async () => {
+    const operations = [];
+    const storage = {
+        sync: {
+            remove: async keys => operations.push(['sync-remove', keys]),
+            get: async keys => { operations.push(['sync-get', keys]); return {}; },
+        },
+        local: {
+            remove: async keys => operations.push(['local-remove', keys]),
+            get: async keys => { operations.push(['local-get', keys]); return {}; },
+        },
+    };
+    await deleteExistingShortcuts(storage);
+    assert.deepEqual(operations.map(operation => operation[0]), ['sync-remove', 'sync-get', 'local-remove', 'local-get']);
 });
 
 test('updater logs persist in localStorage and can be cleared', () => {

@@ -148,6 +148,20 @@
         try { await storageCall(sync, 'remove', keys); } catch (error) { log('Could not clear old sync data', error.message); }
     }
 
+    async function deleteExistingShortcuts(storage) {
+        const syncKeys = ['keys', SYNC_META_KEY];
+        for (let index = 0; index < MAX_CHUNKS; index++) syncKeys.push(`${SYNC_CHUNK_PREFIX}${index}`);
+        if (storage.sync) {
+            await storageCall(storage.sync, 'remove', syncKeys);
+            const remainingSync = await storageCall(storage.sync, 'get', syncKeys);
+            if (Object.keys(remainingSync || {}).length) fail('Existing sync shortcuts were not deleted.');
+        }
+        await storageCall(storage.local, 'remove', ['keys']);
+        const remainingLocal = await storageCall(storage.local, 'get', 'keys');
+        if (remainingLocal?.keys !== undefined) fail('Existing local shortcuts were not deleted.');
+        log('Existing shortcuts deleted before import');
+    }
+
     async function saveToSync(sync, json) {
         const chunks = [];
         for (let index = 0; index < json.length; index += SYNC_CHUNK_SIZE) {
@@ -185,7 +199,9 @@
         if (!response.ok) fail(`GitHub returned HTTP ${response.status}.`);
         const shortcuts = normalizeShortcuts(await response.json());
         const json = JSON.stringify(shortcuts);
-        const area = await replaceShortcuts(getStorageApi(), json);
+        const storage = getStorageApi();
+        await deleteExistingShortcuts(storage);
+        const area = await replaceShortcuts(storage, json);
         log('Shortcuts replaced', {count: shortcuts.length, area, bytes: byteSize(json)});
         let logsDownloaded = false;
         try {
@@ -196,7 +212,7 @@
         return {count: shortcuts.length, area, json, logsDownloaded};
     }
 
-    const api = {SOURCE_URL, normalizeShortcuts, replaceShortcuts, updateShortkeysFromGithub, readLogs, appendLog, clearLogs, startLogDownload};
+    const api = {SOURCE_URL, normalizeShortcuts, deleteExistingShortcuts, replaceShortcuts, updateShortkeysFromGithub, readLogs, appendLog, clearLogs, startLogDownload};
     if (typeof module === 'object' && module.exports) {
         module.exports = api;
     } else {
