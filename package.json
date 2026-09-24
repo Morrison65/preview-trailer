@@ -1,0 +1,12 @@
+{
+  "name": "preview-trailer",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Open the selected page preview or trailer in a looping player",
+  "scripts": {
+    "check": "node --check preview-trailer.js && node --test test/core.test.cjs && node test/browser.cjs",
+    "test": "node --test test/core.test.cjs",
+    "test:browser": "node test/browser.cjs",
+    "build": "node tools/build.cjs"
+  }
+}

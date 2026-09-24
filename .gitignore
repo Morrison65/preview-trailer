@@ -1,0 +1,10 @@
+node_modules/
+verification/
+*.log
+*.mp4
+*.webm
+*.har
+
+
+#Ignore vscode AI rules
+.github\instructions\codacy.instructions.md
