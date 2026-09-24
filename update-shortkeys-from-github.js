@@ -9,11 +9,75 @@
     const SYNC_CHUNK_PREFIX = 'keys_';
     const SYNC_META_KEY = 'keys_meta';
     const MAX_CHUNKS = 15;
+    const LOG_STORAGE_KEY = 'preview_trailer_update_logs';
+    const MAX_LOG_ENTRIES = 200;
+
+    function readLogs() {
+        try {
+            const value = global.localStorage?.getItem(LOG_STORAGE_KEY);
+            const logs = value ? JSON.parse(value) : [];
+            return Array.isArray(logs) ? logs : [];
+        } catch { return []; }
+    }
+
+    function appendLog(message, details) {
+        try {
+            const entry = {timestamp: new Date().toISOString(), message};
+            if (details !== undefined) entry.details = details;
+            const logs = [...readLogs(), entry].slice(-MAX_LOG_ENTRIES);
+            global.localStorage?.setItem(LOG_STORAGE_KEY, JSON.stringify(logs));
+        } catch { /* Logging must not stop the shortcut update. */ }
+    }
+
+    function clearLogs() {
+        try { global.localStorage?.removeItem(LOG_STORAGE_KEY); } catch { /* Best effort. */ }
+    }
 
     function log(message, details) {
+        appendLog(message, details);
         const output = global.console;
         if (!output?.info) return;
         details === undefined ? output.info(`[Shortkeys updater] ${message}`) : output.info(`[Shortkeys updater] ${message}`, details);
+    }
+
+    async function startLogDownload() {
+        const logs = readLogs();
+        if (!logs.length) return false;
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const filename = `Logs/preview-trailer-update-${timestamp}.json`;
+        const blob = new global.Blob([JSON.stringify(logs, null, 2)], {type:'application/json'});
+        const url = global.URL.createObjectURL(blob);
+        try {
+            const downloads = global.browser?.downloads || global.chrome?.downloads;
+            if (downloads?.download) {
+                await new Promise((resolve, reject) => {
+                    const callback = downloadId => {
+                        const error = global.chrome?.runtime?.lastError;
+                        if (error) reject(new Error(error.message));
+                        else resolve(downloadId);
+                    };
+                    try {
+                        const result = global.browser
+                            ? downloads.download({url, filename, saveAs:false})
+                            : downloads.download({url, filename, saveAs:false}, callback);
+                        if (result?.then) result.then(resolve, reject);
+                    } catch (error) { reject(error); }
+                });
+            } else {
+                const anchor = global.document?.createElement('a');
+                if (!anchor) throw new Error('No browser download API is available.');
+                anchor.href = url;
+                anchor.download = filename;
+                anchor.style.display = 'none';
+                global.document.body?.append(anchor);
+                anchor.click();
+                anchor.remove();
+            }
+            clearLogs();
+            return true;
+        } finally {
+            global.setTimeout(() => global.URL.revokeObjectURL(url), 1000);
+        }
     }
 
     function fail(message) {
@@ -123,10 +187,16 @@
         const json = JSON.stringify(shortcuts);
         const area = await replaceShortcuts(getStorageApi(), json);
         log('Shortcuts replaced', {count: shortcuts.length, area, bytes: byteSize(json)});
-        return {count: shortcuts.length, area, json};
+        let logsDownloaded = false;
+        try {
+            logsDownloaded = await startLogDownload();
+        } catch (error) {
+            log('Log download failed; stored logs were retained', error.message);
+        }
+        return {count: shortcuts.length, area, json, logsDownloaded};
     }
 
-    const api = {SOURCE_URL, normalizeShortcuts, replaceShortcuts, updateShortkeysFromGithub};
+    const api = {SOURCE_URL, normalizeShortcuts, replaceShortcuts, updateShortkeysFromGithub, readLogs, appendLog, clearLogs, startLogDownload};
     if (typeof module === 'object' && module.exports) {
         module.exports = api;
     } else {
