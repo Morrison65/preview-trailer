@@ -99,7 +99,7 @@
         try { await storageCall(sync, 'remove', staleKeys); } catch (error) { log('Could not remove stale sync chunks', error.message); }
     }
 
-    async function saveShortcuts(storage, json) {
+    async function replaceShortcuts(storage, json) {
         const sync = storage.sync;
         if (sync && byteSize(json) < SYNC_QUOTA - 2048) {
             try {
@@ -121,12 +121,12 @@
         if (!response.ok) fail(`GitHub returned HTTP ${response.status}.`);
         const shortcuts = normalizeShortcuts(await response.json());
         const json = JSON.stringify(shortcuts);
-        const area = await saveShortcuts(getStorageApi(), json);
-        log('Shortcuts updated', {count: shortcuts.length, area, bytes: byteSize(json)});
+        const area = await replaceShortcuts(getStorageApi(), json);
+        log('Shortcuts replaced', {count: shortcuts.length, area, bytes: byteSize(json)});
         return {count: shortcuts.length, area, json};
     }
 
-    const api = {SOURCE_URL, normalizeShortcuts, updateShortkeysFromGithub};
+    const api = {SOURCE_URL, normalizeShortcuts, replaceShortcuts, updateShortkeysFromGithub};
     if (typeof module === 'object' && module.exports) {
         module.exports = api;
     } else {

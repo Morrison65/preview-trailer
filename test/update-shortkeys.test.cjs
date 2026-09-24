@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const {normalizeShortcuts} = require('../update-shortkeys-from-github.js');
+const {normalizeShortcuts, replaceShortcuts} = require('../update-shortkeys-from-github.js');
 
 test('GitHub shortcut updates use Shortkeys normalization rules', () => {
     const shortcuts = normalizeShortcuts([
@@ -17,4 +17,24 @@ test('GitHub shortcut updates use Shortkeys normalization rules', () => {
 test('GitHub shortcut updates reject invalid or empty exports', () => {
     assert.throws(() => normalizeShortcuts({}), /must contain an array/);
     assert.throws(() => normalizeShortcuts([{label:'empty'}]), /no usable shortcuts/);
+});
+
+test('GitHub updates replace the complete shortcut list in sync and local storage', async () => {
+    const syncWrites = [];
+    const syncRemovals = [];
+    const localWrites = [];
+    const storage = {
+        sync: {
+            set: async value => syncWrites.push(value),
+            remove: async value => syncRemovals.push(value),
+        },
+        local: {set: async value => localWrites.push(value)},
+    };
+    const json = JSON.stringify([{key:'ctrl+new', action:'javascript', code:'new'}]);
+    const area = await replaceShortcuts(storage, json);
+    assert.equal(area, 'sync');
+    assert.equal(syncWrites[0].keys_0, json);
+    assert.equal(localWrites[0].keys, json);
+    assert.ok(syncRemovals[0].includes('keys'));
+    assert.ok(syncRemovals[0].includes('keys_1'));
 });
