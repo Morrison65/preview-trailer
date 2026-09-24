@@ -307,8 +307,12 @@
         if (!/(^|\.)adulttime\.com$/i.test(page.hostname)) return null;
         if (!/^https:\/\/videothumb\.gammacdn\.com\/\d+x\d+\/\d+\.mp4$/i.test(preview)) return null;
 
+        const url = hoverPreview?.url() ??  window?.hoveredSceneUrl
+        logger.info(url)
+        logger.info('Resolved AdultTime trailer from url', { url });
+
         openPreviewFullscreenAT(
-            hoverPreview.url()
+            url
         );
         return
 
