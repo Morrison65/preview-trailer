@@ -161,7 +161,12 @@
                     'x-algolia-application-id': config.applicationID,
                     'x-algolia-api-key': config.apiKey,
                 },
-                body: JSON.stringify({requests:[{indexName:'all_scenes_latest_desc', query:clipId, hitsPerPage:20}]}),
+                body: JSON.stringify({requests:[{
+                    indexName:'all_scenes_latest_desc',
+                    query:'',
+                    hitsPerPage:1000,
+                    attributesToRetrieve:['clip_id', 'trailers', 'video_formats'],
+                }]}),
             });
             if (!response.ok) return null;
             const payload = await response.json();
@@ -169,6 +174,7 @@
                 .find(item => String(item?.clip_id) === clipId);
             const trailer = adultTimeTrailerFromHit(hit);
             if (trailer) logger.info('Resolved AdultTime trailer from clip metadata', {clipId, target: target?.tagName || 'none'});
+            else logger.warn('AdultTime trailer metadata unavailable; using thumbnail', {clipId});
             return trailer;
         } catch (error) {
             logger.debug('AdultTime trailer metadata lookup failed', error.message);
