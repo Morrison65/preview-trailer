@@ -500,12 +500,13 @@
         const pageUrl = win.location.href;
         const page = new URL(pageUrl);
         let newWindow = null;
+        let preview;
         if (/(^|\.)adulttime\.com$/i.test(page.hostname)) {
             newWindow = atStuff(logger, win);
         }
         if (!newWindow) {
             logger.info('Starting', { page: describeUrl(pageUrl), target: target?.tagName || 'none' });
-            let preview = retrievePreviewUrl(doc, pageUrl, target, logger);
+            preview = retrievePreviewUrl(doc, pageUrl, target, logger);
             // Reserve exactly one popup during the triggering user gesture, before retries.
             newWindow = win.open('about:blank', '_blank', 'popup=yes,width=1100,height=720');
         }
