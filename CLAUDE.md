@@ -18,6 +18,10 @@ Node.js 22+ is required; there are no npm dependencies. Browser tests also need 
 
 Single unit test file: `node --test test/update-shortkeys.test.cjs`. CI (`.github/workflows/ci.yml`) runs `npm run release` on Ubuntu with chromium and ffmpeg; `anthropic-wifi-test.yml` is unrelated to the build.
 
+## Cloud sessions and dev containers
+
+`.devcontainer/` (Node 22, Chromium, FFmpeg, Claude Code) and the Claude Code cloud `SessionStart` hook (`.claude/hooks/session-start.sh`) set `CHROME_PATH` to `.devcontainer/chrome-headless.sh`, so `npm run check` and `npm run release` run on Linux. Mention `@claude` in an issue or PR (owner only) to run `.github/workflows/claude.yml`.
+
 ## Project map
 
 - `preview-trailer.js` is the maintained implementation: one self-contained IIFE (no runtime dependencies) with a browser entry point that auto-runs unless `PreviewTrailerOptions.autoRun === false`, the player, the `SITE_ADAPTERS` registry, and a CommonJS export (only when `window` is undefined) used by tests.

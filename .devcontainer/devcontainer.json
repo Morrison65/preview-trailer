@@ -1,0 +1,22 @@
+{
+  "name": "Preview Trailer",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:22-bookworm",
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/anthropics/devcontainer-features/claude-code:1": {}
+  },
+  "postCreateCommand": "sudo apt-get update && sudo apt-get install -y --no-install-recommends chromium ffmpeg",
+  "containerEnv": {
+    "CHROME_PATH": "${containerWorkspaceFolder}/.devcontainer/chrome-headless.sh"
+  },
+  "mounts": [
+    "source=claude-code-config-${devcontainerId},target=/home/node/.claude,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "anthropic.claude-code"
+      ]
+    }
+  }
+}
