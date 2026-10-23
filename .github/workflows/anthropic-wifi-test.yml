@@ -1,30 +1,53 @@
+# Checks that GitHub OIDC -> Anthropic workload identity federation works for
+# this repository. The IDs are not secrets; the JWT and access token are masked.
+# Federation is set up at platform.claude.com/settings/workload-identity-federation;
+# denials show there under the History tab.
 name: anthropic-wif-test
-on: push
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/anthropic-wifi-test.yml]
 permissions:
   id-token: write
   contents: read
 jobs:
   call-claude:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      ANTHROPIC_FEDERATION_RULE_ID: fdrl_01BfoUttG5PviU61rqmfKXKH
+      ANTHROPIC_ORGANIZATION_ID: c67ab0b8-c617-40b7-8fa7-2baf2b9a7d41
+      ANTHROPIC_SERVICE_ACCOUNT_ID: svac_01SLtCsJSZ6RFnbzm5MNvdyW
+      ANTHROPIC_WORKSPACE_ID: wrkspc_015xDNgGtAbXCxqVCXR1sSME
+      ANTHROPIC_IDENTITY_TOKEN_FILE: /tmp/gha-jwt
     steps:
       - name: Fetch GitHub OIDC token
-        uses: actions/github-script@v8
-        with:
-          script: |
-            const token = await core.getIDToken('https://api.anthropic.com');
-            core.setSecret(token);
-            core.exportVariable('JWT', token);
+        run: |
+          jwt=$(curl -sS --fail-with-body -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=https://api.anthropic.com" | jq -er .value)
+          echo "::add-mask::$jwt"
+          printf '%s' "$jwt" > "$ANTHROPIC_IDENTITY_TOKEN_FILE"
+          # Print only the claims a federation rule matches on.
+          jq -rR 'split(".")[1] | gsub("-";"+") | gsub("_";"/") | @base64d | fromjson
+            | {iss, aud, sub, repository_owner, ref, event_name}' "$ANTHROPIC_IDENTITY_TOKEN_FILE"
       - name: Exchange for an Anthropic access token
         run: |
-          curl -sS https://api.anthropic.com/v1/oauth/token \
-            -H "content-type: application/json" \
-            --data @- <<JSON | jq 'with_entries(if (.key | test("token$")) then .value = "<redacted>" else . end)'
-          {
-            "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-            "assertion": "$JWT",
-            "federation_rule_id": "fdrl_01BfoUttG5PviU61rqmfKXKH",
-            "organization_id": "c67ab0b8-c617-40b7-8fa7-2baf2b9a7d41",
-            "service_account_id": "svac_01SLtCsJSZ6RFnbzm5MNvdyW",
-            "workspace_id": "wrkspc_015xDNgGtAbXCxqVCXR1sSME"
+          body=$(jq -n --rawfile jwt "$ANTHROPIC_IDENTITY_TOKEN_FILE" '{
+            grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+            assertion: $jwt,
+            federation_rule_id: env.ANTHROPIC_FEDERATION_RULE_ID,
+            organization_id: env.ANTHROPIC_ORGANIZATION_ID,
+            service_account_id: env.ANTHROPIC_SERVICE_ACCOUNT_ID,
+            workspace_id: env.ANTHROPIC_WORKSPACE_ID
+          }')
+          response=$(curl -sS --fail-with-body https://api.anthropic.com/v1/oauth/token -H "content-type: application/json" --data "$body") || {
+            echo "::error::Token exchange failed: $response"
+            exit 1
           }
-          JSON
+          token=$(jq -r '.access_token // empty' <<< "$response")
+          if [[ "$token" != sk-ant-oat01-* ]]; then
+            echo "::error::Token exchange returned no access token"
+            exit 1
+          fi
+          echo "::add-mask::$token"
+          jq '{token_type, expires_in, scope}' <<< "$response"
