@@ -4,9 +4,14 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check-and-build:
@@ -15,18 +20,26 @@ jobs:
 
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
           node-version: 22
 
-      - name: Install browser test dependencies
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y chromium ffmpeg
+      # The runner image ships Google Chrome, which test/browser.cjs picks first;
+      # only ffmpeg (with libvpx) is needed for the playback fixture.
+      - name: Install test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y ffmpeg
+          google-chrome --version
+          ffmpeg -hide_banner -encoders | grep -q libvpx
 
       - name: Run tests and build artifacts
         run: npm run release
 
-      - name: Verify generated artifacts are present
-        run: test -s shortkeys.json && test -s Importurl.txt && test -s preview-trailer.bookmarklet.txt
+      - name: Verify generated artifacts are present and committed
+        run: |
+          test -s shortkeys.json && test -s Importurl.txt && test -s preview-trailer.bookmarklet.txt
+          git diff --exit-code -- shortkeys.json preview-trailer.bookmarklet.txt
