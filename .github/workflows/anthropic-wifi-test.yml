@@ -1,7 +1,8 @@
 # Checks that GitHub OIDC -> Anthropic workload identity federation works for
 # this repository. The IDs are not secrets; the JWT and access token are masked.
 # Federation is set up at platform.claude.com/settings/workload-identity-federation;
-# denials show there under the History tab.
+# denials show there under the History tab. GitHub issues the subject as
+# repo:<owner>@<owner_id>/<repo>@<repo_id>:ref:<ref>, so the rule matches on that form.
 name: anthropic-wif-test
 on:
   workflow_dispatch:
